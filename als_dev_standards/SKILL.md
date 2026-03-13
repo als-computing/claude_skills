@@ -1,5 +1,5 @@
 ---
-name: als_dev_standards
+name: als-dev-standards
 description: "Apply ALS Photon Science Computing software development standards to Python and React/TypeScript code. Use this skill whenever the user asks to write, review, rewrite, or explain code in any ALS project. Triggers include: write a function/flow/task/CLI/component, review this code, does this follow our standards, add docstrings, add type hints, write a test, write a Prefect test, set up pyproject.toml, add logging, add error handling, rewrite this, add JSDoc, write a Vitest test, make a Tiled API call, or any request touching Python code quality, typing, documentation, testing, logging, error handling, CLI design, file paths, project structure, React components, Finch, or Tiled in ALS projects (splash_flows, als_messages, PETIOLE-AI, SYNAPS-AI, tiled-viewer-react, finch, or related beamline projects)."
 ---
 
