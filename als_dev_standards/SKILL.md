@@ -375,5 +375,11 @@ See `references/react.md` for full detail.
 - [ ] Tiled calls use exported library functions, not raw axios/fetch
 - [ ] Tiled calls wrapped in TanStack Query
 - [ ] JSDoc on all components, hooks, and utilities
-- [ ] Vitest tests present with at least one test per prop
+- [ ] Multiple style props use named variant object + helper function; no nested ternaries
+- [ ] Patterns (variant logic, ARIA, disabled styling) applied consistently across sibling components
+- [ ] Toggle/active buttons have `aria-pressed={active}`; attribute absent when prop is undefined
+- [ ] Disabled elements have `opacity-50 cursor-not-allowed` alongside the `disabled` attribute
+- [ ] Vitest tests cover each prop combination independently with positive + negative assertions
+- [ ] ARIA attributes tested explicitly (attribute present when prop set, absent when not)
+- [ ] One Storybook story per visual variant; no undocumented states
 - [ ] React Router v7 for routing; TanStack Query for server state

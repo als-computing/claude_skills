@@ -234,9 +234,128 @@ export function ScanCard({ nodeId, config, onSelect }: ScanCardProps) { ... }
 
 ---
 
+## Component API Design
+
+### Name all prop combinations explicitly
+
+When a component has multiple boolean style props (e.g. `isSecondary`, `active`), define all combinations as named variants in an object rather than using nested ternaries. This makes every visual state explicit and prevents combinations from being silently dropped.
+
+```tsx
+// ✅ Named variants — all combinations are visible and intentional
+const buttonVariants = {
+    primary:         'bg-sky-500 text-white hover:bg-sky-600',
+    primaryActive:   'bg-sky-700 text-white hover:bg-sky-800',
+    secondary:       'bg-transparent text-black border hover:bg-slate-100',
+    secondaryActive: 'bg-slate-200 text-black border hover:bg-slate-300',
+};
+
+const getButtonClasses = (active?: boolean, isSecondary?: boolean) => {
+    if (active && isSecondary) return buttonVariants.secondaryActive;
+    if (active)                return buttonVariants.primaryActive;
+    if (isSecondary)           return buttonVariants.secondary;
+    return buttonVariants.primary;
+};
+
+// ❌ Nested ternaries — secondaryActive combination is silently missing
+const classes = active
+    ? 'bg-sky-700 text-white'
+    : isSecondary
+    ? 'bg-transparent text-black border'
+    : 'bg-sky-500 text-white';
+```
+
+### Apply patterns consistently across sibling components
+
+If a pattern (variant logic, ARIA attributes, disabled styling) is applied to one component in a family, apply it to all siblings with the same props. Inconsistency across `Button`, `ButtonIconOnly`, `ButtonWithIcon` etc. creates unpredictable behavior for consumers.
+
+### Prefer `variant` over multiple booleans at major version boundaries
+
+`isSecondary?: boolean` works fine for small prop sets. If a component grows beyond 2–3 style booleans, migrate to `variant: 'primary' | 'secondary' | 'ghost'` at the next major version bump — this prevents conflicting prop combinations and scales cleanly. Never make this change in a minor/patch release as it breaks the public API.
+
+---
+
+## Accessibility
+
+### Toggle buttons must have `aria-pressed`
+
+Any button that can be in an active/pressed/selected state must include `aria-pressed`. Pass the prop value directly — when the prop is `undefined` the attribute is absent entirely, which is correct (don't label a non-toggle button as a toggle).
+
+```tsx
+// ✅ aria-pressed is set when active=true, absent when active=undefined
+<button aria-pressed={active} ...>
+
+// ❌ Hard-coding false adds an incorrect implicit toggle role
+<button aria-pressed={active ?? false} ...>
+```
+
+### Disabled elements must have visual styling
+
+The HTML `disabled` attribute prevents interaction but provides no visual feedback. Always pair it with `opacity-50 cursor-not-allowed` so users can see the element is not interactive.
+
+```tsx
+// ✅
+<button
+    disabled={disabled}
+    className={`... ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+>
+
+// ❌ Functionally disabled but visually identical to enabled
+<button disabled={disabled} className="...">
+```
+
+---
+
 ## Testing with Vitest
 
-Every new component must have a Vitest test file with at least one test per prop:
+Every new component must have a Vitest test file. Test each prop and each combination of props that produces a distinct visual or behavioral state.
+
+### Test each variant combination independently
+
+Don't test "A overrides B" — test each state on its own with both positive (`toHaveClass`) and negative (`not.toHaveClass`) assertions. This catches regressions in any individual state without relying on override order.
+
+```tsx
+// ✅ One test per combination, positive + negative assertions
+it('applies primary styling when not active and not secondary', () => {
+    const { container } = render(<Button text="Primary" />);
+    expect(container.firstChild).toHaveClass('bg-sky-500', 'text-white');
+    expect(container.firstChild).not.toHaveClass('bg-sky-700', 'bg-transparent');
+});
+
+it('applies primary active styling when active is true', () => {
+    const { container } = render(<Button text="Primary Active" active={true} />);
+    expect(container.firstChild).toHaveClass('bg-sky-700', 'text-white');
+    expect(container.firstChild).not.toHaveClass('bg-sky-500', 'bg-transparent');
+});
+
+it('applies secondary active styling when both active and isSecondary are true', () => {
+    const { container } = render(<Button text="Secondary Active" active={true} isSecondary={true} />);
+    expect(container.firstChild).toHaveClass('bg-slate-200', 'text-black', 'border');
+    expect(container.firstChild).not.toHaveClass('bg-sky-500', 'bg-sky-700', 'bg-transparent');
+});
+
+// ❌ Tests override behavior — will pass even if secondaryActive has wrong styles
+it('active overrides isSecondary styling', () => {
+    const { container } = render(<Button active={true} isSecondary={true} />);
+    expect(container.firstChild).toHaveClass('bg-sky-700');
+    expect(container.firstChild).not.toHaveClass('bg-transparent');
+});
+```
+
+### Test ARIA attributes explicitly
+
+```tsx
+it('sets aria-pressed when active is true', () => {
+    render(<Button text="Active" active={true} />);
+    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
+});
+
+it('does not set aria-pressed when active is not provided', () => {
+    render(<Button text="Default" />);
+    expect(screen.getByRole('button')).not.toHaveAttribute('aria-pressed');
+});
+```
+
+### General Vitest patterns
 
 ```tsx
 import { describe, it, expect, vi } from 'vitest';
@@ -256,6 +375,26 @@ describe('ScanCard', () => {
     expect(onSelect).toHaveBeenCalledWith('abc123');
   });
 });
+```
+
+---
+
+## Storybook
+
+Every named visual variant must have a corresponding Storybook story. If a component has 4 visual states, there must be 4 stories — one per state. Stories serve as living documentation and catch visual regressions that unit tests miss.
+
+```tsx
+// ✅ One story per variant — all 4 combinations covered
+export const Primary: Story = { args: { text: 'primary' } };
+export const Active: Story = { args: { text: 'active', active: true } };
+export const Secondary: Story = { args: { text: 'secondary', isSecondary: true } };
+export const ActiveSecondary: Story = { args: { text: 'active secondary', active: true, isSecondary: true } };
+export const Disabled: Story = { args: { text: 'disabled', disabled: true } };
+
+// ❌ Missing ActiveSecondary — that visual state is undocumented and unreviewed
+export const Primary: Story = { args: { text: 'primary' } };
+export const Active: Story = { args: { text: 'active', active: true } };
+export const Secondary: Story = { args: { text: 'secondary', isSecondary: true } };
 ```
 
 ---
