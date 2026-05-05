@@ -130,6 +130,25 @@ Use Tailwind utility classes for all styling. The project uses `darkMode: 'class
 <div className="bg-sky-darkest dark:bg-slate-dark">
 ```
 
+#### Sizing scale
+
+Tailwind's spacing/sizing numbers are multiples of **0.25rem** (~4px at the browser default font size). So `w-52` = 13rem ≈ 208px, `max-h-40` = 10rem ≈ 160px. Because the unit is `rem`, spacing scales with the user's browser font size setting — which is why `px` values should be avoided.
+
+#### Prefer standard sizes over arbitrary values
+
+Always use a standard Tailwind size class when one is close enough. Only use arbitrary syntax (`text-[11px]`) when no standard class fits, and in that case use `rem` not `px`.
+
+```tsx
+// ✅ Standard class — scales with browser font size
+<span className="text-xs">
+
+// ✅ Arbitrary but in rem — still scales
+<span className="text-[0.7rem]">
+
+// ❌ Arbitrary px — ignores the user's font size preference
+<span className="text-[11px]">
+```
+
 ### shadcn/ui
 
 Use shadcn components for complex base UI (date pickers, dialogs, dropdowns, etc.).
@@ -264,6 +283,58 @@ const classes = active
     : 'bg-sky-500 text-white';
 ```
 
+### Don't create props that just pass a single Tailwind class
+
+If a prop would only ever hold a Tailwind class string (e.g. `maxHeight?: string` accepting `"max-h-48"`), remove it — consumers can pass that class via the existing `className` prop instead. Dedicated single-concept props are confusing (is `maxHeight` a pixel number? a CSS property value? a class name?) and duplicate what `className` already provides.
+
+```tsx
+// ✅ User passes height constraint through className
+<ColormapPicker value={cmap} onChange={setCmap} className="max-h-40" />
+
+// ❌ Redundant prop — same result, more API surface, ambiguous type
+<ColormapPicker value={cmap} onChange={setCmap} maxHeight="max-h-40" />
+```
+
+### Set default dimensions so a component looks good standalone
+
+Components with `w-full` buttons or other full-width children will stretch to fill their container and look broken on a blank page. Set a sensible default `width` (or `min-w` + `max-w`) on the container so the component is usable without any `className` override. Document that `className` can override it.
+
+```tsx
+// ✅ Sensible default width — looks reasonable without any className
+<div className={cn("w-52 min-w-40 ...", className)}>
+
+// ❌ Takes up 100% width — looks broken on a blank Storybook page
+<div className={cn("...", className)}>
+```
+
+### Text styles must be on the element that renders the text
+
+A font-size or color class on a parent element has no effect if the text is inside a child element that defines its own styles. Always apply text utilities directly to the element containing the text.
+
+```tsx
+// ✅ text-xs is on the <span> that renders the label
+<button className="flex items-center gap-2 px-2 py-1.5 rounded">
+  <span className="text-xs">{label}</span>
+</button>
+
+// ❌ text-xs is on <button> but text is in a child <span> — the class does nothing
+<button className="flex items-center gap-2 px-2 py-1.5 rounded text-xs">
+  <span className="text-sm">{label}</span>
+</button>
+```
+
+### Use `truncate` for text in fixed-width containers
+
+When text is inside an element with a fixed width, add `truncate` to prevent overflow. `truncate` is a Tailwind shorthand for `overflow-hidden whitespace-nowrap text-ellipsis` — all three are required for ellipsis clipping to work.
+
+```tsx
+// ✅ Long labels clip cleanly inside the fixed-width span
+<span className="w-14 truncate">{label}</span>
+
+// ❌ Long labels overflow into the adjacent element
+<span className="w-14">{label}</span>
+```
+
 ### Apply patterns consistently across sibling components
 
 If a pattern (variant logic, ARIA attributes, disabled styling) is applied to one component in a family, apply it to all siblings with the same props. Inconsistency across `Button`, `ButtonIconOnly`, `ButtonWithIcon` etc. creates unpredictable behavior for consumers.
@@ -286,6 +357,44 @@ Any button that can be in an active/pressed/selected state must include `aria-pr
 
 // ❌ Hard-coding false adds an incorrect implicit toggle role
 <button aria-pressed={active ?? false} ...>
+```
+
+### Single-selection lists must use radiogroup semantics
+
+When a group of options allows exactly one selection at a time (like a colormap picker, a tab bar, or a segmented control), use `role="radiogroup"` on the container and `role="radio"` + `aria-checked` on each option. This tells screen readers which item is selected and that the group is mutually exclusive.
+
+```tsx
+// ✅ Correct — screen reader announces "Colormap, group" and which item is checked
+<div role="radiogroup" aria-label="Colormap">
+  {options.map(opt => (
+    <button
+      key={opt.id}
+      role="radio"
+      aria-checked={value === opt.id}
+      onClick={() => onChange(opt.id)}
+    >
+      {opt.label}
+    </button>
+  ))}
+</div>
+
+// ❌ No ARIA — screen reader sees anonymous buttons with no group context
+<div>
+  {options.map(opt => (
+    <button key={opt.id} onClick={() => onChange(opt.id)}>{opt.label}</button>
+  ))}
+</div>
+```
+
+Test both the group label and the checked state:
+
+```tsx
+it('marks the selected item as checked', () => {
+  render(<ColormapPicker value="magma" onChange={vi.fn()} />);
+  expect(screen.getByRole('radiogroup', { name: 'Colormap' })).toBeInTheDocument();
+  expect(screen.getByRole('radio', { name: /magma/i })).toHaveAttribute('aria-checked', 'true');
+  expect(screen.getByRole('radio', { name: /viridis/i })).toHaveAttribute('aria-checked', 'false');
+});
 ```
 
 ### Disabled elements must have visual styling
@@ -381,6 +490,46 @@ describe('ScanCard', () => {
 
 ## Storybook
 
+### Controlled components need a `renderWithState` wrapper
+
+Storybook freezes `args` after the initial render. For controlled components (those with a `value` + `onChange` pair), clicking in the story does nothing because `value` never updates. Add a shared `render` function with `useState` so the component is actually interactive.
+
+```tsx
+import { useState } from 'react';
+import type { ComponentProps } from 'react';
+
+function renderWithState(args: ComponentProps<typeof MyPicker>) {
+    const [value, setValue] = useState(args.value);
+    return <MyPicker {...args} value={value} onChange={setValue} />;
+}
+
+export const Default: Story = {
+    render: renderWithState,
+    args: { value: 'viridis' },
+};
+```
+
+Don't pass `onChange: fn()` in args when using `renderWithState` — the wrapper supplies its own `onChange` and the mock will never be called.
+
+### Story documentation for non-obvious props
+
+When a prop takes a non-obvious format (e.g. a comma-separated color stop string, a specific ID scheme), add a `parameters.docs.description.story` block to the relevant story. This renders as markdown above the story in Storybook's Docs view.
+
+```tsx
+export const CustomColormaps: Story = {
+    parameters: {
+        docs: {
+            description: {
+                story: `
+**Color stops format:** A comma-separated string of hex codes: \`'#FF0000,#0000FF'\`
+                `,
+            },
+        },
+    },
+    args: { ... },
+};
+```
+
 Every named visual variant must have a corresponding Storybook story. If a component has 4 visual states, there must be 4 stories — one per state. Stories serve as living documentation and catch visual regressions that unit tests miss.
 
 ```tsx
@@ -395,6 +544,28 @@ export const Disabled: Story = { args: { text: 'disabled', disabled: true } };
 export const Primary: Story = { args: { text: 'primary' } };
 export const Active: Story = { args: { text: 'active', active: true } };
 export const Secondary: Story = { args: { text: 'secondary', isSecondary: true } };
+```
+
+---
+
+## File Organization
+
+Simple components (a single `.tsx` file with no supporting code) live directly in `src/components/`. When a component has supporting files — type definitions, constants, utilities, hooks — create a named subfolder:
+
+```
+src/components/
+  InputSlider.tsx          # simple — no supporting files
+  ColormapPicker/
+    ColormapPicker.tsx     # component
+    colormaps.ts           # constants + types used only by this component
+```
+
+Re-export from the package root (`src/index.ts`) using the full path — no barrel `index.ts` inside the subfolder needed unless the component family grows large.
+
+```ts
+// src/index.ts
+export { default as ColormapPicker } from './components/ColormapPicker/ColormapPicker';
+export { COLORMAPS } from './components/ColormapPicker/colormaps';
 ```
 
 ---
