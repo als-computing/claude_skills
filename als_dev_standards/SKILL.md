@@ -370,10 +370,24 @@ See `references/react.md` for full detail.
 
 **React / TypeScript:**
 - [ ] Colors from `@als-computing/colors`; icons from `@als-computing/icons`; no hardcoded hex values
-- [ ] Tailwind for styling; shadcn for base components
+- [ ] Tailwind for styling; shadcn for base components; standard size classes used (`text-xs` not `text-[11px]`); arbitrary sizes in `rem` not `px`
 - [ ] Finch components reused; no one-off layouts
+- [ ] Components with supporting files (constants, types) live in their own subfolder under `components/`
+- [ ] No single-concept props that duplicate `className` (e.g. no `maxHeight?: string` when `className` does the job)
+- [ ] Component has sensible default `width`/`min-width` so it looks reasonable on a blank page
+- [ ] Text utility classes applied directly to the element rendering the text, not a parent
+- [ ] Fixed-width text containers use `truncate` to prevent overflow
 - [ ] Tiled calls use exported library functions, not raw axios/fetch
 - [ ] Tiled calls wrapped in TanStack Query
 - [ ] JSDoc on all components, hooks, and utilities
-- [ ] Vitest tests present with at least one test per prop
+- [ ] Multiple style props use named variant object + helper function; no nested ternaries
+- [ ] Patterns (variant logic, ARIA, disabled styling) applied consistently across sibling components
+- [ ] Toggle/active buttons have `aria-pressed={active}`; attribute absent when prop is undefined
+- [ ] Single-selection option groups use `role="radiogroup"` + `aria-label` on container, `role="radio"` + `aria-checked` on each option
+- [ ] Disabled elements have `opacity-50 cursor-not-allowed` alongside the `disabled` attribute
+- [ ] Vitest tests cover each prop combination independently with positive + negative assertions
+- [ ] ARIA attributes tested explicitly; radiogroup tests check both group label and `aria-checked` state
+- [ ] One Storybook story per visual variant; no undocumented states
+- [ ] Controlled components (`value` + `onChange`) use a `renderWithState` wrapper in stories so interactions are live
+- [ ] Non-obvious prop formats documented with `parameters.docs.description.story`
 - [ ] React Router v7 for routing; TanStack Query for server state
